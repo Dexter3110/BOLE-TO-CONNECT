@@ -5,11 +5,11 @@ require("dotenv").config();
 const bool = (v) => String(v).toLowerCase() === "true";
 
 const pool = new Pool({
-  host: process.env.DB_HOST || "localhost",
+  host: process.env.DB_HOST || "dpg-d3vmc2vdiees73f42r60-a.singapore-postgres.render.com",
   port: Number(process.env.DB_PORT || 5432),
   database: process.env.DB_NAME || "boleto_connect",
-  user: process.env.DB_USER || "boleto_user",
-  password: process.env.DB_PASSWORD || "Dexter2107",
+  user: process.env.DB_USER || "boleto_connect_user",
+  password: process.env.DB_PASSWORD || "E8WO41Ur6zCJDgpYpSNyH7SYjzp9q07p",
   ssl: bool(process.env.DB_SSL) || process.env.NODE_ENV === "production"
     ? { rejectUnauthorized: false }
     : false,
