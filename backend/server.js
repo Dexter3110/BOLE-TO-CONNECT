@@ -1,9 +1,11 @@
 // server.js
+
+
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const app = express();
-
-require("dotenv").config();
 
 const pool = require("./db"); // PostgreSQL connection
 const scheduleRoutes = require("./routes/scheduleRoutes");
