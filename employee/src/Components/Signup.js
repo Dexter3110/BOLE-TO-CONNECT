@@ -1,41 +1,54 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "./Signup.css"; // Importing CSS for styling
-import { API } from '../api';
-
+import "./Signup.css";
+import { API } from "../api";
 
 const Signup = () => {
   const [formData, setFormData] = useState({ name: "", email: "", password: "" });
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
+    setLoading(true);
 
     try {
-      // Use relative URL so the frontend `proxy` (or same-origin) routes to the local backend during development
-      const response = await fetch(`${API}/signup`, {
+      const res = await fetch(`${API}/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
-      if (response.ok) {
-        setMessage("Signup successful! Redirecting to login...");
-        setTimeout(() => navigate("/login"), 1500);
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 201 && data?.token) {
+        // Save token/user if you want to keep the user logged-in
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+
+        setMessage("Signup successful! Redirecting to login…");
+        setTimeout(() => navigate("/login"), 1200);
+      } else if (res.status === 409) {
+        setMessage("Email already registered");
+      } else if (res.status === 400) {
+        setMessage(data?.error || "All fields are required");
       } else {
-        setMessage(data.error);
+        setMessage(data?.error || "Signup failed. Please try again.");
       }
-    } catch (error) {
-      setMessage("Signup failed. Please try again.");
+    } catch (_err) {
+      setMessage("Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
+
+  const isSuccess = message.toLowerCase().includes("successful");
 
   return (
     <div className="auth-container signup-container">
@@ -44,7 +57,7 @@ const Signup = () => {
           <h2 className="auth-title">Create an Account</h2>
           <p className="auth-subtitle">Join Boleto Connect and manage your events</p>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
             <label htmlFor="name">Full Name</label>
@@ -56,9 +69,10 @@ const Signup = () => {
               value={formData.name}
               onChange={handleChange}
               required
+              disabled={loading}
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="email">Email Address</label>
             <input
@@ -69,9 +83,11 @@ const Signup = () => {
               value={formData.email}
               onChange={handleChange}
               required
+              disabled={loading}
+              autoComplete="email"
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="password">Password</label>
             <input
@@ -82,20 +98,22 @@ const Signup = () => {
               value={formData.password}
               onChange={handleChange}
               required
+              disabled={loading}
+              autoComplete="new-password"
             />
           </div>
-          
-          <button type="submit" className="auth-btn signup-btn">
-            Create Account
+
+          <button type="submit" className="auth-btn signup-btn" disabled={loading}>
+            {loading ? "Creating…" : "Create Account"}
           </button>
         </form>
-        
+
         {message && (
-          <div className={`message-box ${message.includes("successful") ? "success" : "error"}`}>
+          <div className={`message-box ${isSuccess ? "success" : "error"}`}>
             {message}
           </div>
         )}
-        
+
         <div className="auth-footer">
           <p className="auth-link">
             Already have an account? <a href="/login">Log In</a>
