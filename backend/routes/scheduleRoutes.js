@@ -1,4 +1,3 @@
-// backend/routes/scheduleRoutes.js
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
@@ -60,13 +59,12 @@ router.post("/submit", async (req, res) => {
       `INSERT INTO schedules (user_id, month, schedule_data, is_submitted)
        VALUES ($1, $2, $3, $4)
        RETURNING id, user_id, month, schedule_data, is_submitted, created_at`,
-      [user_id, month, normalized.data, true]
+      [user_id, month, JSON.stringify(normalized.data), true]
     );
 
     return res.status(201).json({ message: "Schedule submitted successfully!", schedule: rows[0] });
   } catch (err) {
     console.error("POST /submit error:", err);
-    // common: column mismatch → ensure table uses is_submitted (not submitted)
     return res.status(500).json({ message: "Server error" });
   }
 });
@@ -105,7 +103,6 @@ router.get("/user/:user_id", async (req, res) => {
     const { rows } = await pool.query(q, params);
 
     if (rows.length === 0) {
-      // Return a shaped empty schedule instead of 404 so UI can render gracefully
       return res.json({
         schedule: {
           id: null,
@@ -188,14 +185,14 @@ router.put("/edit/:schedule_id", async (req, res) => {
     // update schedule
     await pool.query(
       "UPDATE schedules SET schedule_data = $1, updated_at = now() WHERE id = $2",
-      [next, schedule_id]
+      [JSON.stringify(next), schedule_id]
     );
 
-    // log edit (store both states inside 'changes' JSONB)
+    // log edit
     await pool.query(
       `INSERT INTO schedule_edits (schedule_id, edited_by, changes)
        VALUES ($1, $2, $3)`,
-      [schedule_id, boss_id, { before: previous, after: next }]
+      [schedule_id, boss_id, JSON.stringify({ before: previous, after: next })]
     );
 
     return res.json({ message: "Schedule updated successfully!" });
