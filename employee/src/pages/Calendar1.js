@@ -3,7 +3,6 @@ import { FaRegStickyNote } from "react-icons/fa";
 import Button from "../Components/ui/button";
 import "../pages/CalendarPage.css";
 import jsPDF from "jspdf";
-import axios from "axios";
 
 const CalendarPage = () => {
   const [notes, setNotes] = useState({});
@@ -12,41 +11,48 @@ const CalendarPage = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  
+
   const currentYear = new Date().getFullYear();
   const months = [
-    "January", "February", "March", "April", "May", "June", 
+    "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
   ];
-  
+
   const daysInMonth = new Date(currentYear, selectedMonth + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentYear, selectedMonth, 1).getDay();
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const user_id = localStorage.getItem("user_id");
+  const API = "https://bole-to-connect.onrender.com";
+  const monthKey = `${currentYear}-${String(selectedMonth + 1).padStart(2, "0")}`; // e.g. 2025-10
 
+  /* --------------------- Fetch schedule --------------------- */
   useEffect(() => {
     if (!user_id) return;
     setLoading(true);
     setError("");
 
-    fetch(`https://bole-to-connect.onrender.com/api/schedules/user/${user_id}?month=${months[selectedMonth]}`)
-      .then((response) => response.json())
+    fetch(`${API}/api/schedules/user/${user_id}?month=${monthKey}`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
       .then((data) => {
-        setNotes(
-          data.length > 0 && data[0].schedule_data 
-            ? JSON.parse(data[0].schedule_data) 
-            : {}
-        );
-        setLoading(false);
+        const schedule = data?.schedule || null;
+        const parsedNotes =
+          typeof schedule?.schedule_data === "string"
+            ? JSON.parse(schedule.schedule_data)?.notes || {}
+            : schedule?.schedule_data?.notes || {};
+        setNotes(parsedNotes);
       })
       .catch((error) => {
         console.error("Error fetching schedule:", error);
         setError("Failed to fetch schedule.");
-        setLoading(false);
-      });
-  }, [user_id, selectedMonth]);
+      })
+      .finally(() => setLoading(false));
+  }, [user_id, monthKey]);
 
+  /* --------------------- Note editing --------------------- */
   const handleNoteClick = (day) => {
     setInputVisible(day);
     setNewNote(notes?.[day] || "");
@@ -59,69 +65,74 @@ const CalendarPage = () => {
     setInputVisible(null);
   };
 
+  /* --------------------- Submit schedule --------------------- */
   const handleSubmit = async () => {
     if (!user_id) {
       alert("User ID not found. Please log in again.");
       return;
     }
+
     if (Object.keys(notes).length === 0) {
       alert("No notes to submit!");
       return;
     }
 
     try {
-      const userEmail = localStorage.getItem("user_email");
-      const scheduleData = {
+      const payload = {
         user_id,
-        email: userEmail,
-        month: months[selectedMonth],
-        schedule_data: JSON.stringify(notes),
+        month: monthKey,
+        schedule_data: { notes, tasks: [] },
       };
 
-      const submitResponse = await fetch("https://bole-to-connect.onrender.com/api/schedules/submit", {
+      const response = await fetch(`${API}/api/schedules/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(scheduleData),
+        body: JSON.stringify(payload),
       });
 
-      const result = await submitResponse.json();
-      alert(result.message);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result?.message || "Submission failed");
 
-      if (!submitResponse.ok) {
-        console.error("Error submitting schedule:", result);
-      }
+      alert(result.message || "Schedule submitted successfully!");
     } catch (error) {
       console.error("Error submitting schedule:", error);
       alert("An error occurred while submitting the schedule.");
     }
   };
 
+  /* --------------------- Download PDF --------------------- */
   const downloadSchedule = () => {
     const doc = new jsPDF();
     doc.setFont("helvetica", "bold");
     doc.text(`📅 ${months[selectedMonth]} ${currentYear} Schedule`, 10, 10);
-    
+
     let y = 20;
     Object.entries(notes || {}).forEach(([day, note]) => {
       doc.setFont("helvetica", "normal");
-      const wrappedText = doc.splitTextToSize(`Day ${day}: ${note}`, 180);
-      doc.text(wrappedText, 10, y);
-      y += wrappedText.length * 6;
+      const wrapped = doc.splitTextToSize(`Day ${day}: ${note}`, 180);
+      doc.text(wrapped, 10, y);
+      y += wrapped.length * 6;
     });
-    
+
     doc.save(`schedule_${months[selectedMonth]}_${currentYear}.pdf`);
   };
 
+  /* --------------------- UI --------------------- */
   return (
     <div className="calendar-container">
-      <h2 className="calendar-title">📅 {months[selectedMonth]} {currentYear} Schedule</h2>
+      <h2 className="calendar-title">
+        📅 {months[selectedMonth]} {currentYear} Schedule
+      </h2>
+
       <select
         className="month-selector"
         onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
         value={selectedMonth}
       >
-        {months.map((month, index) => (
-          <option key={index} value={index}>{month}</option>
+        {months.map((month, i) => (
+          <option key={i} value={i}>
+            {month}
+          </option>
         ))}
       </select>
 
@@ -130,7 +141,9 @@ const CalendarPage = () => {
 
       <div className="calendar-weekdays">
         {weekdays.map((day) => (
-          <div key={day} className="weekday">{day}</div>
+          <div key={day} className="weekday">
+            {day}
+          </div>
         ))}
       </div>
 
@@ -150,7 +163,9 @@ const CalendarPage = () => {
                   onChange={(e) => setNewNote(e.target.value)}
                   placeholder="Enter note..."
                 />
-                <button className="save-btn" onClick={() => handleNoteSave(i + 1)}>Save</button>
+                <button className="save-btn" onClick={() => handleNoteSave(i + 1)}>
+                  Save
+                </button>
               </div>
             ) : (
               notes[i + 1] && <p className="note-text">{notes[i + 1]}</p>
@@ -160,8 +175,12 @@ const CalendarPage = () => {
       </div>
 
       <div className="button-container">
-        <Button onClick={handleSubmit} className="submit-btn">Submit</Button>
-        <Button onClick={downloadSchedule} className="download-btn">Download Schedule</Button>
+        <Button onClick={handleSubmit} className="submit-btn">
+          Submit
+        </Button>
+        <Button onClick={downloadSchedule} className="download-btn">
+          Download Schedule
+        </Button>
       </div>
     </div>
   );
