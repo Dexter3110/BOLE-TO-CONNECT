@@ -1,10 +1,17 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { FaRegStickyNote, FaCalendarAlt, FaTasks, FaDownload, FaUserCog } from "react-icons/fa";
+import {
+  FaRegStickyNote,
+  FaCalendarAlt,
+  FaTasks,
+  FaDownload,
+  FaUserCog,
+} from "react-icons/fa";
 import Button from "../Components/ui/button";
 import "../pages/CalendarPage.css";
 import jsPDF from "jspdf";
 import MotivationalMessageInput from "../Components/MotivationalMessageInput";
-import { API } from "../api";
+
+const BASE_URL = "https://bole-to-connect-1.onrender.com"; // 🔧 <-- Change this to your actual backend URL
 
 const CalendarPage = () => {
   const [notes, setNotes] = useState({});
@@ -38,18 +45,15 @@ const CalendarPage = () => {
   const weekdays = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
   const user_id = localStorage.getItem("user_id");
-
-  // helper: YYYY-MM key for API
   const monthKey = `${currentYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
 
-  // Check role + load employees if boss
+  // ✅ Check if boss + load employees
   useEffect(() => {
     const checkIfBoss = async () => {
       try {
-        // RELATIVE path -> CRA proxy to :5000
-        const resp = await fetch(`${API}/api/schedules/user-role/${user_id}`);
+        const resp = await fetch(`${BASE_URL}/api/schedules/user-role/${user_id}`);
         const data = await resp.json();
-        if (data.role === "boss" || data.role === "manager" || data.role === "admin") {
+        if (["boss", "manager", "admin"].includes(data.role)) {
           setIsBoss(true);
           fetchEmployees();
         } else {
@@ -62,12 +66,13 @@ const CalendarPage = () => {
     if (user_id) checkIfBoss();
   }, [user_id]);
 
+  // ✅ Fetch employees for boss
   const fetchEmployees = useCallback(async () => {
     try {
-      const response = await fetch(`${API}/api/schedules/all-employees?boss_id=${user_id}`);
+      const response = await fetch(`${BASE_URL}/api/schedules/all-employees?boss_id=${user_id}`);
       const data = await response.json();
-      const uniqueEmployees = [...new Set(data.map(s => s.user_id))].map(id => {
-        const e = data.find(s => s.user_id === id);
+      const uniqueEmployees = [...new Set(data.map((s) => s.user_id))].map((id) => {
+        const e = data.find((s) => s.user_id === id);
         return { id: e.user_id, name: e.name, email: e.email };
       });
       setEmployees(uniqueEmployees);
@@ -76,6 +81,7 @@ const CalendarPage = () => {
     }
   }, [user_id]);
 
+  // ✅ Fetch user (or selected employee) schedule
   const fetchScheduleData = useCallback(async () => {
     if (!user_id) {
       setError("User not logged in");
@@ -87,16 +93,11 @@ const CalendarPage = () => {
       setError("");
       const targetUserId = selectedEmployee || user_id;
 
-      // RELATIVE path + month as YYYY-MM
-      const response = await fetch(`${API}/api/schedules/user/${targetUserId}?month=${monthKey}`);
+      const response = await fetch(`${BASE_URL}/api/schedules/user/${targetUserId}?month=${monthKey}`);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = await response.json();
-
-      // Backend returns { schedule: {...} } (or null-like object)
       const schedule = data?.schedule || null;
 
       if (schedule && schedule.schedule_data) {
@@ -104,20 +105,30 @@ const CalendarPage = () => {
           typeof schedule.schedule_data === "string"
             ? JSON.parse(schedule.schedule_data)
             : schedule.schedule_data;
-
         setNotes(payload?.notes || {});
         if (Array.isArray(payload?.tasks) && payload.tasks.length === 7) {
           setTasks(payload.tasks);
         } else {
-          setTasks(prev =>
-            prev.map(t => ({ ...t, details: "", completionDay: "", duration: "", comments: "" }))
+          setTasks((prev) =>
+            prev.map((t) => ({
+              ...t,
+              details: "",
+              completionDay: "",
+              duration: "",
+              comments: "",
+            }))
           );
         }
       } else {
-        // No schedule yet -> reset fields
         setNotes({});
-        setTasks(prev =>
-          prev.map(t => ({ ...t, details: "", completionDay: "", duration: "", comments: "" }))
+        setTasks((prev) =>
+          prev.map((t) => ({
+            ...t,
+            details: "",
+            completionDay: "",
+            duration: "",
+            comments: "",
+          }))
         );
       }
     } catch (err) {
@@ -133,6 +144,7 @@ const CalendarPage = () => {
     fetchScheduleData();
   }, [fetchScheduleData]);
 
+  // ✅ Note + Task handlers
   const handleNoteClick = (day) => {
     setInputVisible(day);
     setNewNote(notes?.[day] || "");
@@ -143,10 +155,11 @@ const CalendarPage = () => {
   };
   const handleTaskEdit = (taskId) => setEditingTask(taskId);
   const handleTaskSave = (taskId, field, value) => {
-    setTasks(tasks.map(t => (t.id === taskId ? { ...t, [field]: value } : t)));
+    setTasks(tasks.map((t) => (t.id === taskId ? { ...t, [field]: value } : t)));
   };
   const handleTaskSubmit = () => setEditingTask(null);
 
+  // ✅ Submit schedule
   const handleSubmit = async () => {
     if (!user_id) {
       alert("User ID not found. Please log in again.");
@@ -155,23 +168,21 @@ const CalendarPage = () => {
     try {
       const payload = {
         user_id: selectedEmployee || user_id,
-        month: monthKey, // send YYYY-MM
+        month: monthKey,
         schedule_data: { notes, tasks },
       };
 
-      // If boss editing an existing schedule, fetch id first
       let scheduleId;
       if (isBoss && selectedEmployee) {
-        const resp = await fetch(`${API}/api/schedules/user/${selectedEmployee}?month=${monthKey}`);
+        const resp = await fetch(`${BASE_URL}/api/schedules/user/${selectedEmployee}?month=${monthKey}`);
         const d = await resp.json();
-        const sched = d?.schedule;
-        scheduleId = sched?.id || null;
+        scheduleId = d?.schedule?.id || null;
       }
 
       const endpoint =
         isBoss && selectedEmployee && scheduleId
-          ? `/api/schedules/edit/${scheduleId}`
-          : `/api/schedules/submit`;
+          ? `${BASE_URL}/api/schedules/edit/${scheduleId}`
+          : `${BASE_URL}/api/schedules/submit`;
       const method = isBoss && selectedEmployee && scheduleId ? "PUT" : "POST";
 
       const response = await fetch(endpoint, {
@@ -184,13 +195,12 @@ const CalendarPage = () => {
       });
 
       const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result?.message || "Failed to submit schedule");
-      }
+      if (!response.ok) throw new Error(result?.message || "Failed to submit schedule");
 
       alert(
-        isBoss && selectedEmployee ? "Schedule updated successfully!" : "Schedule submitted successfully!"
+        isBoss && selectedEmployee
+          ? "Schedule updated successfully!"
+          : "Schedule submitted successfully!"
       );
       fetchScheduleData();
     } catch (error) {
@@ -199,6 +209,7 @@ const CalendarPage = () => {
     }
   };
 
+  // ✅ PDF download
   const downloadSchedule = () => {
     const doc = new jsPDF();
     doc.setFont("helvetica", "bold");
@@ -311,7 +322,6 @@ const CalendarPage = () => {
             <h1 className="calendar-title">
               <FaCalendarAlt className="header-icon" /> {months[selectedMonth]} {currentYear} Schedule
             </h1>
-
             <div className="header-controls">
               <div className="select-container">
                 <select
@@ -324,7 +334,6 @@ const CalendarPage = () => {
                   ))}
                 </select>
               </div>
-
               {isBoss && (
                 <div className="select-container employee-select">
                   <FaUserCog className="select-icon" />
@@ -366,7 +375,9 @@ const CalendarPage = () => {
                 <div
                   key={i}
                   className={`calendar-day ${
-                    new Date().getDate() === i + 1 && new Date().getMonth() === selectedMonth ? "today" : ""
+                    new Date().getDate() === i + 1 && new Date().getMonth() === selectedMonth
+                      ? "today"
+                      : ""
                   }`}
                 >
                   <div className="day-header">
@@ -395,9 +406,7 @@ const CalendarPage = () => {
             <h2 className="section-title">
               <FaTasks className="section-icon" /> Monthly Tasks
             </h2>
-            <div className="tasks-grid">
-              {tasks.map((task) => renderTaskBox(task))}
-            </div>
+            <div className="tasks-grid">{tasks.map((task) => renderTaskBox(task))}</div>
           </div>
 
           <div className="actions-section">
