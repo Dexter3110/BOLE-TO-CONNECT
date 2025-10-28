@@ -11,7 +11,7 @@ import "../pages/CalendarPage.css";
 import jsPDF from "jspdf";
 import MotivationalMessageInput from "../Components/MotivationalMessageInput";
 
-const BASE_URL = "https://bole-to-connect-1.onrender.com"; // 🔧 <-- Change this to your actual backend URL
+const BASE_URL = "https://bole-to-connect.onrender.com"; // 🔧 <-- Change this to your actual backend URL
 
 const CalendarPage = () => {
   const [notes, setNotes] = useState({});
