@@ -30,7 +30,7 @@ const CalendarPage = () => {
     setLoading(true);
     setError("");
 
-    fetch(`http://localhost:5000/api/schedules/user/${user_id}?month=${months[selectedMonth]}`)
+    fetch(`https://bole-to-connect.onrender.com/api/schedules/user/${user_id}?month=${months[selectedMonth]}`)
       .then((response) => response.json())
       .then((data) => {
         setNotes(
@@ -78,7 +78,7 @@ const CalendarPage = () => {
         schedule_data: JSON.stringify(notes),
       };
 
-      const submitResponse = await fetch("http://localhost:5000/api/schedules/submit", {
+      const submitResponse = await fetch("https://bole-to-connect.onrender.com/api/schedules/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(scheduleData),
